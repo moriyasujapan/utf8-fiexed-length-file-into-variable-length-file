@@ -18,13 +18,13 @@ clean:
 test: $(TARGET)
 	@echo "=== テスト1: CSV出力（トリミングあり） ==="
 	@echo "注意: 表示幅ベース（半角=1、全角=2）で処理します"
-	./$(TARGET) -w 10,20,10 -d , -t sample_input.txt sample_output.csv
+	LANG=C.UTF-8 LC_ALL=C.UTF-8 ./$(TARGET) -w 10,20,10 -d , -t sample_input.txt sample_output.csv
 	@echo ""
 	@echo "=== 出力内容 ==="
 	cat sample_output.csv
 	@echo ""
 	@echo "=== テスト2: TSV出力（トリミングあり） ==="
-	./$(TARGET) -w 10,20,10 -d $$'\t' -t sample_input.txt sample_output.tsv
+	LANG=C.UTF-8 LC_ALL=C.UTF-8 ./$(TARGET) -w 10,20,10 -d $$'\t' -t sample_input.txt sample_output.tsv
 	@echo ""
 	@echo "=== 出力内容 ==="
 	cat sample_output.tsv

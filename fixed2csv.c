@@ -6,6 +6,8 @@
  * 使用例: ./fixed2csv -w 10,20,15 -d , input.txt output.csv
  */
 
+#define _XOPEN_SOURCE 700
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,11 +72,9 @@ size_t utf8_display_width(const char *str) {
 void utf8_substr_by_width(const char *src, size_t start_width, size_t len_width,
                           char *dest, size_t dest_size) {
     size_t current_width = 0;
-    size_t start_byte = 0;
-    size_t end_byte = 0;
+    const char *start_ptr = src;
+    const char *end_ptr = src;
     const char *p = src;
-    size_t byte_pos = 0;
-    int found_start = 0;
 
     /* 開始位置を探す（表示幅ベース） */
     while (*p && current_width < start_width) {
@@ -85,22 +85,20 @@ void utf8_substr_by_width(const char *src, size_t start_width, size_t len_width,
             current_width += get_char_width(wc);
         }
 
-        byte_pos += bytes;
         p += bytes;
     }
-    start_byte = byte_pos;
+    start_ptr = p;
 
     /* 指定された表示幅分を取得 */
     current_width = 0;
     while (*p && current_width < len_width) {
         wchar_t wc;
         size_t bytes;
-        size_t prev_pos = byte_pos;
 
         if (utf8_to_wchar(p, &wc, &bytes) == 0) {
             int char_width = get_char_width(wc);
 
-            /* 次の文字を追加すると幅を超える場合は、空白でパディングして終了 */
+            /* 次の文字を追加すると幅を超える場合は終了 */
             if (current_width + char_width > len_width) {
                 break;
             }
@@ -108,17 +106,16 @@ void utf8_substr_by_width(const char *src, size_t start_width, size_t len_width,
             current_width += char_width;
         }
 
-        byte_pos += bytes;
         p += bytes;
     }
-    end_byte = byte_pos;
+    end_ptr = p;
 
     /* コピー */
-    size_t copy_len = end_byte - start_byte;
+    size_t copy_len = end_ptr - start_ptr;
     if (copy_len >= dest_size) {
         copy_len = dest_size - 1;
     }
-    memcpy(dest, src + start_byte, copy_len);
+    memcpy(dest, start_ptr, copy_len);
     dest[copy_len] = '\0';
 }
 
@@ -179,7 +176,24 @@ int main(int argc, char *argv[]) {
     int field_count = 0;
 
     /* ロケールをUTF-8に設定 */
-    setlocale(LC_ALL, "");
+    if (!setlocale(LC_ALL, "")) {
+        setlocale(LC_ALL, "C.UTF-8");
+    }
+
+    /* ロケールがUTF-8でない場合は明示的に設定を試行 */
+    if (MB_CUR_MAX < 2) {
+        if (!setlocale(LC_ALL, "C.UTF-8")) {
+            if (!setlocale(LC_ALL, "en_US.UTF-8")) {
+                setlocale(LC_ALL, "ja_JP.UTF-8");
+            }
+        }
+    }
+
+    /* それでもだめなら警告 */
+    if (MB_CUR_MAX < 2) {
+        fprintf(stderr, "警告: UTF-8ロケールを設定できませんでした。正しく動作しない可能性があります。\n");
+        fprintf(stderr, "環境変数を設定してください: export LANG=C.UTF-8\n");
+    }
 
     /* コマンドライン引数の解析 */
     while ((opt = getopt(argc, argv, "w:d:th")) != -1) {

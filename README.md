@@ -49,17 +49,19 @@ make
 
 ```bash
 # 基本的な使い方（フィールド幅: 10, 20, 15）
-./fixed2csv -w 10,20,15 -d , input.txt output.csv
+LANG=C.UTF-8 ./fixed2csv -w 10,20,15 -d , input.txt output.csv
 
 # タブ区切り（TSV）で出力
-./fixed2csv -w 16,40,10 -d $'\t' input.txt output.tsv
+LANG=C.UTF-8 ./fixed2csv -w 16,40,10 -d $'\t' input.txt output.tsv
 
 # 空白をトリミング
-./fixed2csv -w 10,20,15 -d , -t input.txt output.csv
+LANG=C.UTF-8 ./fixed2csv -w 10,20,15 -d , -t input.txt output.csv
 
 # パイプ区切り
-./fixed2csv -w 10,20,15 -d '|' input.txt output.txt
+LANG=C.UTF-8 ./fixed2csv -w 10,20,15 -d '|' input.txt output.txt
 ```
+
+**重要**: UTF-8ロケールを設定してください（`LANG=C.UTF-8`または`export LANG=C.UTF-8`）。プログラムは自動的にUTF-8ロケールを設定しようとしますが、環境変数で明示的に設定する方が確実です。
 
 ### オプション
 
@@ -151,11 +153,14 @@ EOF
 
 # C言語版で変換
 gcc -o fixed2csv fixed2csv.c
-./fixed2csv -w 10,20,10 -d , -t sample_input.txt sample_output.csv
+LANG=C.UTF-8 ./fixed2csv -w 10,20,10 -d , -t sample_input.txt sample_output.csv
 
 # または、シェルスクリプト版で変換
 chmod +x fixed2csv.sh
 ./fixed2csv.sh -w 10,20,10 -d , -t sample_input.txt sample_output.csv
+
+# または、Makefileを使用
+make test
 
 # 結果を確認
 cat sample_output.csv
@@ -218,14 +223,23 @@ A: 次の文字を追加すると指定幅を超える場合、その文字は�
 
 ### ロケールエラー（C言語版）
 
+C言語版はUTF-8ロケールが必要です。以下の方法で設定してください：
+
 ```bash
-# ロケールを設定
-export LC_ALL=ja_JP.UTF-8
-export LANG=ja_JP.UTF-8
+# 推奨: C.UTF-8を使用（ほとんどのシステムで利用可能）
+export LANG=C.UTF-8
+./fixed2csv -w 10,20,10 -d , input.txt output.csv
 
 # または実行時に指定
-LC_ALL=ja_JP.UTF-8 ./fixed2csv -w 10,20,10 -d , input.txt output.csv
+LANG=C.UTF-8 ./fixed2csv -w 10,20,10 -d , input.txt output.csv
+
+# 日本語ロケールを使用する場合
+export LANG=ja_JP.UTF-8
+export LC_ALL=ja_JP.UTF-8
+./fixed2csv -w 10,20,10 -d , input.txt output.csv
 ```
+
+プログラムは自動的にUTF-8ロケールを設定しようとしますが、環境変数で明示的に設定する方が確実です。
 
 ### Python3が見つからない（シェルスクリプト版）
 
