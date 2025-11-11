@@ -157,7 +157,7 @@ def main():
     with open(input_file, 'r', encoding='utf-8') as infile, \
          open(output_file, 'w', encoding='utf-8', newline='') as outfile:
 
-        writer = csv.writer(outfile, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
+        writer = csv.writer(outfile, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
 
         for line in infile:
             line = line.rstrip('\n\r')
@@ -171,9 +171,9 @@ def main():
                 field = substr_by_width(line, pos, width)
                 pos += width
 
-                # トリミング
+                # トリミング（半角空白とタブのみ、全角空白は除外）
                 if trim:
-                    field = field.strip()
+                    field = field.strip(' \t')
 
                 fields.append(field)
 

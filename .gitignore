@@ -5,6 +5,20 @@ fixed2csv
 sample_output.csv
 sample_output.tsv
 sample_output_sh.csv
+test_c.csv
+test_sh.csv
+test_c_output.csv
+test_sh_output.csv
+test_width_check.txt
+test_odd_width.txt
+test_boundary_split.txt
+test_empty_field.txt
+test_mixed.txt
+test_halfwidth.txt
+test_overflow.txt
+test_special.txt
+test[0-9]*.txt
+test[0-9]*.csv
 
 # デバッグ用の一時ファイル
 test_debug*
