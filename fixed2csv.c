@@ -1,5 +1,6 @@
 /*
  * fixed2csv.c - UTF-8固定長ファイルを可変長(CSV/TSV)に変換
+ * 表示幅ベース: 半角文字=1、全角文字=2
  *
  * コンパイル: gcc -o fixed2csv fixed2csv.c
  * 使用例: ./fixed2csv -w 10,20,15 -d , input.txt output.csv
@@ -16,46 +17,99 @@
 #define MAX_FIELDS 256
 #define MAX_LINE 65536
 
-/* UTF-8文字の先頭バイトかどうかを判定 */
-int is_utf8_start(unsigned char c) {
-    return (c & 0xC0) != 0x80;
-}
+/* UTF-8の1文字をデコードしてワイド文字に変換 */
+int utf8_to_wchar(const char *str, wchar_t *wc, size_t *bytes_consumed) {
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
 
-/* UTF-8文字列の文字数をカウント（バイト数ではなく文字数） */
-size_t utf8_strlen(const char *s) {
-    size_t count = 0;
-    while (*s) {
-        if (is_utf8_start(*s)) {
-            count++;
-        }
-        s++;
+    size_t result = mbrtowc(wc, str, MB_CUR_MAX, &state);
+
+    if (result == (size_t)-1 || result == (size_t)-2) {
+        /* 無効なUTF-8シーケンス */
+        *bytes_consumed = 1;
+        *wc = L'?';
+        return -1;
     }
-    return count;
+
+    *bytes_consumed = result;
+    return 0;
 }
 
-/* UTF-8文字列から指定文字数分を取得 */
-void utf8_substr(const char *src, size_t start_chars, size_t len_chars, char *dest, size_t dest_size) {
-    size_t char_count = 0;
-    size_t byte_pos = 0;
+/* 文字の表示幅を取得（半角=1、全角=2） */
+int get_char_width(wchar_t wc) {
+    int w = wcwidth(wc);
+
+    if (w < 0) {
+        /* 制御文字など */
+        return 0;
+    }
+
+    return w;
+}
+
+/* UTF-8文字列の表示幅を計算 */
+size_t utf8_display_width(const char *str) {
+    size_t width = 0;
+    const char *p = str;
+
+    while (*p) {
+        wchar_t wc;
+        size_t bytes;
+
+        if (utf8_to_wchar(p, &wc, &bytes) == 0) {
+            width += get_char_width(wc);
+        }
+
+        p += bytes;
+    }
+
+    return width;
+}
+
+/* UTF-8文字列から表示幅に基づいて部分文字列を取得 */
+void utf8_substr_by_width(const char *src, size_t start_width, size_t len_width,
+                          char *dest, size_t dest_size) {
+    size_t current_width = 0;
     size_t start_byte = 0;
     size_t end_byte = 0;
+    const char *p = src;
+    size_t byte_pos = 0;
+    int found_start = 0;
 
-    /* 開始位置を探す */
-    while (src[byte_pos] && char_count < start_chars) {
-        if (is_utf8_start(src[byte_pos])) {
-            char_count++;
+    /* 開始位置を探す（表示幅ベース） */
+    while (*p && current_width < start_width) {
+        wchar_t wc;
+        size_t bytes;
+
+        if (utf8_to_wchar(p, &wc, &bytes) == 0) {
+            current_width += get_char_width(wc);
         }
-        byte_pos++;
+
+        byte_pos += bytes;
+        p += bytes;
     }
     start_byte = byte_pos;
 
-    /* 終了位置を探す */
-    char_count = 0;
-    while (src[byte_pos] && char_count < len_chars) {
-        if (is_utf8_start(src[byte_pos])) {
-            char_count++;
+    /* 指定された表示幅分を取得 */
+    current_width = 0;
+    while (*p && current_width < len_width) {
+        wchar_t wc;
+        size_t bytes;
+        size_t prev_pos = byte_pos;
+
+        if (utf8_to_wchar(p, &wc, &bytes) == 0) {
+            int char_width = get_char_width(wc);
+
+            /* 次の文字を追加すると幅を超える場合は、空白でパディングして終了 */
+            if (current_width + char_width > len_width) {
+                break;
+            }
+
+            current_width += char_width;
         }
-        byte_pos++;
+
+        byte_pos += bytes;
+        p += bytes;
     }
     end_byte = byte_pos;
 
@@ -66,32 +120,6 @@ void utf8_substr(const char *src, size_t start_chars, size_t len_chars, char *de
     }
     memcpy(dest, src + start_byte, copy_len);
     dest[copy_len] = '\0';
-}
-
-/* 文字列の前後の空白を削除 */
-void trim(char *str) {
-    char *end;
-
-    /* 先頭の空白をスキップ */
-    while (*str && isspace((unsigned char)*str)) {
-        str++;
-    }
-
-    if (*str == 0) {
-        return;
-    }
-
-    /* 末尾の空白を削除 */
-    end = str + strlen(str) - 1;
-    while (end > str && isspace((unsigned char)*end)) {
-        end--;
-    }
-    *(end + 1) = '\0';
-
-    /* 先頭が空白でずれている場合は詰める */
-    if (str != str) {
-        memmove(str, str, strlen(str) + 1);
-    }
 }
 
 /* CSVフィールドのエスケープ処理 */
@@ -129,7 +157,8 @@ void usage(const char *prog) {
     fprintf(stderr, "使用方法: %s -w widths [-d delimiter] [-t] [-h] input output\n", prog);
     fprintf(stderr, "\n");
     fprintf(stderr, "オプション:\n");
-    fprintf(stderr, "  -w widths    各フィールドの文字幅をカンマ区切りで指定 (例: 10,20,15)\n");
+    fprintf(stderr, "  -w widths    各フィールドの表示幅をカンマ区切りで指定 (例: 10,20,15)\n");
+    fprintf(stderr, "               ※半角文字=1、全角文字=2として計算\n");
     fprintf(stderr, "  -d delimiter 区切り文字 (デフォルト: ,) タブの場合は -d $'\\t'\n");
     fprintf(stderr, "  -t           フィールドの前後の空白を削除\n");
     fprintf(stderr, "  -h           このヘルプを表示\n");
@@ -137,6 +166,8 @@ void usage(const char *prog) {
     fprintf(stderr, "例:\n");
     fprintf(stderr, "  %s -w 10,20,15 -d , -t input.txt output.csv\n", prog);
     fprintf(stderr, "  %s -w 8,12,20 -d $'\\t' input.txt output.tsv\n", prog);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "注意: 幅は表示幅（半角=1、全角=2）で指定します\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -227,19 +258,19 @@ int main(int argc, char *argv[]) {
             len--;
         }
 
-        /* フィールドごとに分割 */
+        /* フィールドごとに分割（表示幅ベース） */
         size_t pos = 0;
         for (int i = 0; i < field_count; i++) {
             char field[MAX_LINE];
             char escaped[MAX_LINE * 2];
 
-            /* フィールドを切り出し */
-            utf8_substr(line, pos, widths[i], field, sizeof(field));
+            /* フィールドを切り出し（表示幅ベース） */
+            utf8_substr_by_width(line, pos, widths[i], field, sizeof(field));
             pos += widths[i];
 
             /* トリミング */
             if (trim_fields) {
-                /* UTF-8対応の簡易トリミング */
+                /* UTF-8対応のトリミング */
                 char *start = field;
                 char *end = field + strlen(field) - 1;
 
