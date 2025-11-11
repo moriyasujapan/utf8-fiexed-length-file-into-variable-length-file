@@ -1,0 +1,24 @@
+# コンパイルされたバイナリ
+fixed2csv
+
+# テスト出力ファイル
+sample_output.csv
+sample_output.tsv
+sample_output_sh.csv
+
+# デバッグ用の一時ファイル
+test_debug*
+
+# オブジェクトファイル
+*.o
+*.a
+
+# エディタの一時ファイル
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
